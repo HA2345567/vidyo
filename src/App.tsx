@@ -24,8 +24,10 @@ import {
   ensureYtDlp,
   findFfmpeg,
   probe,
+  searchVideos,
   type DownloadChoice,
   type DownloadProgress,
+  type SearchResult,
   type VideoInfo,
 } from './lib/ytdlp.js'
 
@@ -89,6 +91,7 @@ export type Outcome = {filepath?: string}
 type Phase =
   | {name: 'input'; warning?: string}
   | {name: 'probing'; status: string}
+  | {name: 'select_search'}
   | {name: 'picking'}
   | {
       name: 'downloading'
@@ -107,6 +110,12 @@ const HINTS: Record<Phase['name'], Array<[string, string]>> = {
   ],
   probing: [
     ['esc', 'cancel'],
+    ['^c', 'quit'],
+  ],
+  select_search: [
+    ['↑↓', 'choose'],
+    ['↵', 'select'],
+    ['esc', 'back'],
     ['^c', 'quit'],
   ],
   picking: [
@@ -166,6 +175,7 @@ function AppContent({
   const [platform, setPlatform] = useState<Platform>()
   const [info, setInfo] = useState<VideoInfo>()
   const [choices, setChoices] = useState<DownloadChoice[]>([])
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const ytdlpRef = useRef('')
   const highlightRef = useRef(0) // choice under the cursor, for the ↵ hint click
   const infoJsonRef = useRef<string | undefined>(undefined)
@@ -201,6 +211,31 @@ function AppContent({
     }
   }, [])
 
+  const startSearch = useCallback(async (query: string) => {
+    const controller = new AbortController()
+    abortRef.current = controller
+    setPhase({name: 'probing', status: `searching YouTube for "${truncate(query, 25)}"...`})
+    try {
+      const ytdlp =
+        ytdlpRef.current ||
+        (await ensureYtDlp(status => setPhase({name: 'probing', status}), controller.signal))
+      ytdlpRef.current = ytdlp
+      if (controller.signal.aborted) return
+      const results = await searchVideos(ytdlp, query, controller.signal)
+      if (controller.signal.aborted) return
+      if (results.length === 0) {
+        setPhase({name: 'error', message: `No videos found for "${query}". Try another search term.`})
+        return
+      }
+      setSearchResults(results)
+      highlightRef.current = 0
+      setPhase({name: 'select_search'})
+    } catch (error) {
+      if (controller.signal.aborted) return
+      setPhase({name: 'error', message: error instanceof Error ? error.message : String(error)})
+    }
+  }, [])
+
   useEffect(() => {
     if (initialUrl) void startProbe(initialUrl)
   }, [initialUrl, startProbe])
@@ -211,6 +246,7 @@ function AppContent({
     setPlatform(undefined)
     setInfo(undefined)
     setChoices([])
+    setSearchResults([])
     setPhase({name: 'input'})
   }, [])
 
@@ -226,7 +262,7 @@ function AppContent({
         cycleTheme()
         return
       }
-      if (key.escape && (phase.name === 'picking' || phase.name === 'error' || phase.name === 'done')) resetToInput()
+      if (key.escape && (phase.name === 'picking' || phase.name === 'select_search' || phase.name === 'error' || phase.name === 'done')) resetToInput()
       if (key.escape && (phase.name === 'probing' || phase.name === 'downloading')) cancelRun()
       if (key.return && (phase.name === 'error' || phase.name === 'done')) resetToInput()
     },
@@ -235,12 +271,20 @@ function AppContent({
 
   const handleUrlSubmit = (value: string) => {
     const trimmed = value.trim()
-    if (!isProbablyUrl(trimmed)) {
-      setPhase({name: 'input', warning: 'that doesn’t look like a link — paste a full url'})
-      return
+    if (!trimmed) return
+    if (isProbablyUrl(trimmed)) {
+      setUrl(trimmed)
+      void startProbe(trimmed)
+    } else {
+      void startSearch(trimmed)
     }
-    setUrl(trimmed)
-    void startProbe(trimmed)
+  }
+
+  const handleSelectSearchResult = (item: {value: number}) => {
+    const selected = searchResults[item.value]
+    if (!selected) return
+    setUrl(selected.url)
+    void startProbe(selected.url)
   }
 
   const clipboardOffered = Boolean(clipboardUrl) && isProbablyUrl(clipboardUrl!) && urlInput === ''
@@ -312,6 +356,12 @@ function AppContent({
       clickTargets.push({match: choiceLabel(choice), action: () => handlePick({value: index})})
     }
   }
+  if (phase.name === 'select_search') {
+    for (const [index, result] of searchResults.entries()) {
+      const label = `▶ ${truncate(result.title, Math.max(20, contentWidth - 28))}`
+      clickTargets.push({match: label, action: () => handleSelectSearchResult({value: index})})
+    }
+  }
   if (phase.name === 'done') {
     clickTargets.push({match: DONE_LABEL, padX: 4, padY: 1, action: resetToInput})
   }
@@ -347,12 +397,12 @@ function AppContent({
 
       {phase.name === 'input' && (
         <Box flexDirection="column" alignItems="center">
-          <FramedInput title="Paste a video URL" width={boxWidth} button={VIDYO_BUTTON}>
+          <FramedInput title={clipboardOffered ? 'URL found in clipboard — hit enter to download' : 'Paste URL or search YouTube'} width={boxWidth} button={VIDYO_BUTTON}>
             <TextInput
               value={urlInput}
               onChange={setUrlInput}
               onSubmit={handleUrlSubmit}
-              placeholder="https://youtube.com/watch?v=…"
+              placeholder="https://youtube.com/watch?v=… or search term"
               width={boxWidth - 6}
               history={history}
               submitOnPaste={isProbablyUrl}
@@ -368,6 +418,27 @@ function AppContent({
           ) : clipboardAccepted ? (
             <Text color={theme.gray} dimColor={theme.dimSecondary}>from clipboard — ↵ to enter</Text>
           ) : null}
+        </Box>
+      )}
+
+      {phase.name === 'select_search' && (
+        <Box width={contentWidth}>
+          <Panel title="YouTube Search Results" width={contentWidth}>
+            <SelectInput
+              indicatorComponent={ChoiceIndicator}
+              itemComponent={ChoiceItem}
+              items={searchResults.map((result, index) => ({
+                key: String(index),
+                label: `▶ ${truncate(result.title, Math.max(20, contentWidth - 28))}${
+                  result.duration ? ` (${formatDuration(result.duration)})` : ''
+                }${result.uploader ? ` · ${result.uploader}` : ''}`,
+                value: index,
+              }))}
+              limit={10}
+              onSelect={handleSelectSearchResult}
+              onHighlight={item => (highlightRef.current = item.value)}
+            />
+          </Panel>
         </Box>
       )}
 
@@ -396,7 +467,7 @@ function AppContent({
               {info?.uploader ? ` · ${info.uploader}` : ''}
             </Text>
           </Box>
-          <Panel title="Download" width={38}>
+          <Panel title="Download" width={40}>
             <SelectInput
               indicatorComponent={ChoiceIndicator}
               itemComponent={ChoiceItem}
@@ -405,6 +476,7 @@ function AppContent({
                 label: choiceLabel(choice),
                 value: index,
               }))}
+              limit={12}
               onSelect={handlePick}
               onHighlight={item => (highlightRef.current = item.value)}
             />

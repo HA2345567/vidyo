@@ -1,10 +1,12 @@
 {
-  "name": "vidyo",
-  "private": true,
-  "version": "0.0.0",
+  "name": "vidyo-cli",
+  "version": "1.2.0",
+  "description": "Stream to storage in seconds. Terminal UI video downloader powered by yt-dlp.",
   "type": "module",
+  "license": "MIT",
   "bin": {
-    "vidyo": "dist/cli.js"
+    "vidyo": "dist/cli.js",
+    "vidyo-cli": "dist/cli.js"
   },
   "files": [
     "dist"

@@ -30,7 +30,7 @@ A luxurious, blazing-fast **terminal UI** for downloading videos from YouTube, I
 ## 📸 Preview
 
 <div align="center">
-  <img src="public/preview.jpg" alt="VIDYO Terminal UI Preview" width="700" />
+  <img src="public/vidyo_terminal_pic.png" alt="VIDYO Terminal UI Preview" width="700" />
 </div>
 
 ---
@@ -47,17 +47,17 @@ A luxurious, blazing-fast **terminal UI** for downloading videos from YouTube, I
 ### Install from npm
 
 ```bash
-npm install -g vidyo
+npm install -g vidyo-cli
 # or
-bun install -g vidyo
+bun install -g vidyo-cli
 ```
 
 ### Run directly (no install)
 
 ```bash
-npx vidyo
+npx vidyo-cli
 # or
-bunx vidyo
+bunx vidyo-cli
 ```
 
 ---

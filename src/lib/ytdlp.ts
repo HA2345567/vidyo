@@ -137,6 +137,58 @@ export async function probe(ytdlp: string, url: string, signal?: AbortSignal): P
   return {info, infoJsonPath}
 }
 
+export type SearchResult = {
+  id: string
+  title: string
+  uploader?: string
+  duration?: number
+  url: string
+}
+
+export async function searchVideos(ytdlp: string, query: string, signal?: AbortSignal): Promise<SearchResult[]> {
+  const stdout = await new Promise<string>((resolve, reject) => {
+    const child = spawn(ytdlp, ['-J', '--flat-playlist', '--no-warnings', `ytsearch5:${query}`], {signal})
+    let out = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk: Buffer | string) => (out += chunk))
+    child.stderr.on('data', (chunk: Buffer | string) => (stderr += chunk))
+    child.on('error', reject)
+    child.on('close', (code: number | null) => {
+      if (code !== 0) {
+        reject(new Error(cleanYtDlpError(stderr) || `yt-dlp exited with code ${code}`))
+      } else {
+        resolve(out)
+      }
+    })
+  })
+
+  try {
+    const parsed = JSON.parse(stdout) as {
+      entries?: Array<{
+        id?: string
+        title?: string
+        uploader?: string
+        channel?: string
+        duration?: number
+        webpage_url?: string
+        url?: string
+      }>
+    }
+    const entries = parsed.entries ?? []
+    return entries
+      .map(e => ({
+        id: e.id ?? e.url ?? '',
+        title: e.title ?? 'Untitled Video',
+        uploader: e.uploader ?? e.channel,
+        duration: e.duration,
+        url: e.webpage_url ?? e.url ?? (e.id ? `https://www.youtube.com/watch?v=${e.id}` : ''),
+      }))
+      .filter(e => Boolean(e.url))
+  } catch {
+    throw new Error('Could not parse search results from YouTube.')
+  }
+}
+
 export type DownloadChoice = {
   label: string
   kind: 'video' | 'audio'
@@ -183,11 +235,28 @@ export function buildChoices(info: VideoInfo): DownloadChoice[] {
   }
 
   const audioSizeLabel = audioSize ? ` · ~${formatBytes(audioSize)}` : ''
-  choices.push({
-    kind: 'audio',
-    label: `audio only · mp3${audioSizeLabel}`,
-    args: ['-f', 'ba/b', '-x', '--audio-format', 'mp3', '--audio-quality', '0'],
-  })
+  choices.push(
+    {
+      kind: 'audio',
+      label: `audio only · mp3 (320k)${audioSizeLabel}`,
+      args: ['-f', 'ba/b', '-x', '--audio-format', 'mp3', '--audio-quality', '0'],
+    },
+    {
+      kind: 'audio',
+      label: `audio only · m4a (aac)${audioSizeLabel}`,
+      args: ['-f', 'ba/b', '-x', '--audio-format', 'm4a'],
+    },
+    {
+      kind: 'audio',
+      label: `audio only · flac (lossless)${audioSizeLabel}`,
+      args: ['-f', 'ba/b', '-x', '--audio-format', 'flac'],
+    },
+    {
+      kind: 'audio',
+      label: `audio only · wav (uncompressed)${audioSizeLabel}`,
+      args: ['-f', 'ba/b', '-x', '--audio-format', 'wav'],
+    },
+  )
 
   return choices
 }
