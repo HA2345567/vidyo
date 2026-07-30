@@ -7,7 +7,7 @@ import {Readable} from 'node:stream'
 import {pipeline} from 'node:stream/promises'
 import {formatBytes} from './format.js'
 
-const YOINKS_DIR = path.join(os.homedir(), '.yoinks', 'bin')
+const VIDYO_DIR = path.join(os.homedir(), '.vidyo', 'bin')
 const RELEASE_BASE = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download'
 
 function ytDlpAssetName(): string {
@@ -39,11 +39,11 @@ function commandWorks(cmd: string, args: string[]): Promise<boolean> {
 export async function ensureYtDlp(onStatus: (message: string) => void, signal?: AbortSignal): Promise<string> {
   if (await commandWorks('yt-dlp', ['--version'])) return 'yt-dlp'
 
-  const local = path.join(YOINKS_DIR, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp')
+  const local = path.join(VIDYO_DIR, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp')
   if (await commandWorks(local, ['--version'])) return local
 
   onStatus('first run: fetching yt-dlp…')
-  await fs.mkdir(YOINKS_DIR, {recursive: true})
+  await fs.mkdir(VIDYO_DIR, {recursive: true})
 
   const url = `${RELEASE_BASE}/${ytDlpAssetName()}`
   const response = await fetch(url, {signal})
@@ -53,7 +53,12 @@ export async function ensureYtDlp(onStatus: (message: string) => void, signal?: 
 
   const tmp = `${local}.download`
   await pipeline(Readable.fromWeb(response.body as never), createWriteStream(tmp), {signal})
-  await fs.chmod(tmp, 0o755)
+  try {
+    await fs.chmod(tmp, 0o755)
+  } catch {
+    // ignore on platforms where chmod is not supported
+  }
+  await fs.rm(local, {force: true})
   await fs.rename(tmp, local)
   return local
 }
@@ -127,7 +132,7 @@ export async function probe(ytdlp: string, url: string, signal?: AbortSignal): P
     throw new Error('Could not parse video info from yt-dlp.')
   }
 
-  const infoJsonPath = path.join(os.tmpdir(), `yoinks-info-${process.pid}-${Date.now()}.json`)
+  const infoJsonPath = path.join(os.tmpdir(), `vidyo-info-${process.pid}-${Date.now()}.json`)
   await fs.writeFile(infoJsonPath, stdout)
   return {info, infoJsonPath}
 }
@@ -209,7 +214,7 @@ export type DownloadHandlers = {
   onProcessing: () => void
 }
 
-const PROGRESS_PREFIX = 'YOINK|'
+const PROGRESS_PREFIX = 'VIDYO|'
 const PROGRESS_TEMPLATE = `${PROGRESS_PREFIX}%(progress.downloaded_bytes)s|%(progress.total_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s`
 
 let activeChild: ChildProcess | undefined
@@ -307,8 +312,9 @@ export function download(
         reject(new Error('Download cancelled.'))
         return
       }
-      if (code === 0 && filepath) {
-        resolve(filepath)
+      const finalFile = filepath || destinations.at(-1)
+      if (code === 0 && finalFile) {
+        resolve(finalFile)
       } else {
         reject(new Error(cleanYtDlpError(stderr) || `Download failed (yt-dlp exit code ${code}).`))
       }

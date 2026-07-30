@@ -1,14 +1,11 @@
-import {useEffect, useMemo, useState} from 'react'
-import {Box, Text} from 'ink'
-import {type Theme, useTheme} from '../theme.js'
+import { useEffect, useMemo, useState } from 'react'
+import { Box, Text } from 'ink'
+import { type Theme, useTheme } from '../theme.js'
 
 const ART = [
-'██╗   ██╗██╗██████╗ ██╗   ██╗ ██████╗ ',
-'██║   ██║██║██╔══██╗╚██╗ ██╔╝██╔═══██╗',
-'██║   ██║██║██║  ██║ ╚████╔╝ ██║   ██║',
-'╚██╗ ██╔╝██║██║  ██║  ╚██╔╝  ██║   ██║',
-' ╚████╔╝ ██║██████╔╝   ██║   ╚██████╔╝',
-'  ╚═══╝  ╚═╝╚═════╝    ╚═╝    ╚═════╝ ',
+  '█ █ ███ ██◥ █ █ ◢█◣',
+  '█ █  █  █ █ ◥█◤ █ █',
+  ' █  ███ ██◢  █  ◥█◤',
 ];
 const GRID = ART.map(line => [...line])
 const ROWS = GRID.length
@@ -23,21 +20,21 @@ const TILT = 2 // columns of lean per row — beam slants like /
 const HALF = 2.4 // beam half-width
 // full-cell blocks can swap to a lighter shade char; half-blocks (▀ ▄) must
 // keep their glyph or the effect spills outside the letterform — they dim instead
-const LIGHTER: Record<string, string> = {'█': '▒', '▓': '░'}
-const HALF_BLOCKS = new Set(['▀', '▄'])
+const LIGHTER: Record<string, string> = { '█': '▒', '▓': '░', '◢': '░', '◣': '░', '◥': '░', '◤': '░' }
+const HALF_BLOCKS = new Set(['▀', '▄', '◢', '◣', '◥', '◤'])
 
 const ease = (t: number) => 1 - Math.pow(1 - t, 3)
 
 type Phase = 'intro' | 'idle' | 'sweep'
 
 function cellAt(ch: string, row: number, col: number, phase: Phase, t: number, delay: number, theme: Theme) {
-  if (ch === ' ' || phase === 'idle') return {ch, color: theme.primary, dim: false}
+  if (ch === ' ' || phase === 'idle') return { ch, color: theme.primary, dim: false }
   if (phase === 'intro') {
     const dt = t - delay
-    if (dt < 0) return {ch: ' ', color: theme.primary, dim: false}
-    if (dt < 110) return {ch: HALF_BLOCKS.has(ch) ? ch : '░', color: theme.gray, dim: theme.dimSecondary}
-    if (dt < 220) return {ch: HALF_BLOCKS.has(ch) ? ch : '▒', color: theme.gray, dim: theme.dimSecondary}
-    return {ch, color: theme.primary, dim: false}
+    if (dt < 0) return { ch: ' ', color: theme.primary, dim: false }
+    if (dt < 110) return { ch: HALF_BLOCKS.has(ch) ? ch : '░', color: theme.gray, dim: theme.dimSecondary }
+    if (dt < 220) return { ch: HALF_BLOCKS.has(ch) ? ch : '▒', color: theme.gray, dim: theme.dimSecondary }
+    return { ch, color: theme.primary, dim: false }
   }
   // sweep — beam position leans right as it climbs, only glyphs are touched
   const cols = GRID[0].length
@@ -46,20 +43,20 @@ function cellAt(ch: string, row: number, col: number, phase: Phase, t: number, d
   const p = pMin + ease(t / SWEEP_MS) * (pMax - pMin)
   const d = Math.abs(col - (ROWS - 1 - row) * TILT - p)
   if (d <= HALF && 1 - d / HALF > 0.35) {
-    if (HALF_BLOCKS.has(ch)) return {ch, color: theme.gray, dim: theme.dimSecondary}
-    return {ch: LIGHTER[ch] ?? ch, color: theme.primary, dim: false}
+    if (HALF_BLOCKS.has(ch)) return { ch, color: theme.gray, dim: theme.dimSecondary }
+    return { ch: LIGHTER[ch] ?? ch, color: theme.primary, dim: false }
   }
-  return {ch, color: theme.primary, dim: false}
+  return { ch, color: theme.primary, dim: false }
 }
 
 function renderRow(row: number, phase: Phase, t: number, delays: number[], theme: Theme) {
   // group consecutive same-color cells so each row is a few Text spans, not 24
-  const segments: Array<{text: string; color?: string; dim: boolean}> = []
+  const segments: Array<{ text: string; color?: string; dim: boolean }> = []
   GRID[row].forEach((ch, col) => {
     const cell = cellAt(ch, row, col, phase, t, delays[col], theme)
     const last = segments[segments.length - 1]
     if (last && ((last.color === cell.color && last.dim === cell.dim) || cell.ch === ' ')) last.text += cell.ch
-    else segments.push({text: cell.ch, color: cell.color, dim: cell.dim})
+    else segments.push({ text: cell.ch, color: cell.color, dim: cell.dim })
   })
   return segments.map((seg, i) => (
     <Text key={i} color={seg.color} dimColor={seg.dim}>

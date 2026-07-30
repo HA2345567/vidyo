@@ -1,7 +1,8 @@
 import {render} from 'ink'
-import App from './App.js'
+import {App} from './App.js'
 import {parseArgs} from './lib/args.js'
 import {captureFrames} from './lib/click-map.js'
+import {readClipboard} from './lib/clipboard.js'
 
 const args = parseArgs(process.argv.slice(2))
 
@@ -31,8 +32,10 @@ if (args.error) {
 }
 
 const stdout = captureFrames(process.stdout)
+const clipboardUrl = readClipboard()
 
-render(<App initialUrl={args.initialUrl} initialTheme={args.themeMode} />, {
+render(<App initialUrl={args.initialUrl} initialThemeMode={args.themeMode} clipboardUrl={clipboardUrl} />, {
   stdout,
   patchConsole: false,
 })
+

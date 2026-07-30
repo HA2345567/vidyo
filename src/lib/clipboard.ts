@@ -14,7 +14,8 @@ const COMMANDS: Array<[string, string[]]> =
 export function readClipboard(): string {
   for (const [command, args] of COMMANDS) {
     try {
-      return execFileSync(command, args, {encoding: 'utf8', timeout: 500, stdio: ['ignore', 'pipe', 'ignore']})
+      const output = execFileSync(command, args, {encoding: 'utf8', timeout: 500, stdio: ['ignore', 'pipe', 'ignore']})
+      if (output && typeof output === 'string') return output.trim()
     } catch {
       // tool missing or clipboard empty — try the next one
     }

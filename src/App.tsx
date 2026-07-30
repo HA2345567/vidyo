@@ -1,343 +1,517 @@
-import {useState, useEffect, useCallback, useRef} from 'react'
-import {Box, Text, useApp, useInput} from 'ink'
-import SelectInput from 'ink-select-input'
+import {useCallback, useEffect, useRef, useState} from 'react'
+import os from 'node:os'
+import path from 'node:path'
+import {Box, Text, useApp, useInput, useStdout} from 'ink'
+import SelectInput, {type IndicatorProps, type ItemProps} from 'ink-select-input'
 import Spinner from 'ink-spinner'
-
+import {FramedInput} from './components/framed-input.js'
 import {FullScreen} from './components/fullscreen.js'
 import {Logo} from './components/logo.js'
 import {Panel} from './components/pannel.js'
-import {FramedInput} from './components/framed-input.js'
+
 import {ProgressBar} from './components/progress-bar.js'
 import {Shortcuts} from './components/shortcuts-bar.js'
 import {TextInput} from './components/text-input.js'
-import {ThemeProvider, useTheme, nextThemeMode, type ThemeMode} from './theme.js'
-
+import {clickTargetAt, findFrameRow, frameRowSpan, type ClickTarget} from './lib/click-map.js'
+import {formatBytes, formatDuration, formatEta, formatSpeed, shortenPath, truncate, wrapText} from './lib/format.js'
+import {addToHistory, loadHistory} from './lib/history.js'
+import {detectPlatform, isProbablyUrl, type Platform} from './lib/platform.js'
+import {useMouseClick} from './lib/use-mouse-click.js'
+import {nextThemeMode, ThemeProvider, type ThemeMode, useTheme} from './theme.js'
 import {
+  buildChoices,
+  download,
   ensureYtDlp,
   findFfmpeg,
   probe,
-  buildChoices,
-  download,
-  type VideoInfo,
   type DownloadChoice,
   type DownloadProgress,
+  type VideoInfo,
 } from './lib/ytdlp.js'
-import {loadHistory, addToHistory} from './lib/history.js'
-import {readClipboard} from './lib/clipboard.js'
-import {detectPlatform, isProbablyUrl} from './lib/platform.js'
-import {formatDuration, shortenPath, formatBytes, formatSpeed, formatEta} from './lib/format.js'
-import {useMouseClick} from './lib/use-mouse-click.js'
-import {clickTargetAt} from './lib/click-map.js'
-import os from 'node:os'
 
-type Screen = 'input' | 'probing' | 'choice' | 'downloading' | 'complete' | 'error'
+const OUT_DIR = path.join(os.homedir(), 'Downloads')
+const VIDYO_BUTTON = 'enter'
+const DONE_LABEL = '↵ enter another'
+const TAGLINE = 'Stream to storage in seconds. Paste, pick, play.'
 
-interface AppProps {
-  initialUrl?: string
-  initialTheme?: ThemeMode
+const choiceLabel = (choice: DownloadChoice) => `${choice.kind === 'audio' ? '♪ ' : '▶ '}${choice.label}`
+
+function ChoiceIndicator({isSelected}: IndicatorProps) {
+  const theme = useTheme()
+  return (
+    <Box marginRight={1}>
+      <Text color={theme.primary}>{isSelected ? '❯' : ' '}</Text>
+    </Box>
+  )
 }
 
-function MainApp({initialUrl}: {initialUrl?: string}) {
-  const {exit} = useApp()
+function ChoiceItem({isSelected, label}: ItemProps) {
   const theme = useTheme()
-  const [screen, setScreen] = useState<Screen>(initialUrl ? 'probing' : 'input')
-  const [url, setUrl] = useState(initialUrl ?? '')
-  const [statusMessage, setStatusMessage] = useState('Initializing...')
-  const [history, setHistory] = useState<string[]>([])
-  const [videoInfo, setVideoInfo] = useState<VideoInfo | null>(null)
-  const [infoJsonPath, setInfoJsonPath] = useState<string>('')
-  const [choices, setChoices] = useState<DownloadChoice[]>([])
-  const [progress, setProgress] = useState<DownloadProgress | null>(null)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [savedPath, setSavedPath] = useState('')
-  const [errorMessage, setErrorMessage] = useState('')
+  return (
+    <Text color={theme.primary} bold={isSelected}>
+      {label}
+    </Text>
+  )
+}
 
-  const ytdlpPathRef = useRef<string | null>(null)
-  const ffmpegPathRef = useRef<string | undefined>(undefined)
-  const abortControllerRef = useRef<AbortController | null>(null)
+// explicit blank lines — empty <Box height={1}/> spacers can collapse, and
+// ink boxes default to flexShrink=1, so spacers are the first thing yoga
+// crushes when content overflows the terminal
+const Gap = ({lines = 1}: {lines?: number}) => (
+  <Box flexDirection="column" flexShrink={0}>
+    {Array.from({length: lines}, (_, i) => (
+      <Text key={i}> </Text>
+    ))}
+  </Box>
+)
 
-  useEffect(() => {
-    setHistory(loadHistory())
+// fixed-width slots — the centered line must not change width as values tick,
+// otherwise the whole layout shifts on every progress update
+function partLabel(progress: DownloadProgress): string {
+  // explains the bar resetting between files (video, then audio)
+  return progress.totalParts > 1 ? `part ${progress.part + 1}/${progress.totalParts}  ` : ''
+}
+
+function downloadMeta(progress: DownloadProgress): string {
+  const speed = progress.speed ? formatSpeed(progress.speed) : ''
+  const eta = progress.eta ? `${formatEta(progress.eta)} left` : ''
+  return `${partLabel(progress)}${speed.padStart(10)}  ${eta.padEnd(12)}`
+}
+
+function indeterminateMeta(progress: DownloadProgress): string {
+  const bytes = formatBytes(progress.downloadedBytes)
+  const speed = progress.speed ? formatSpeed(progress.speed) : ''
+  return `${partLabel(progress)}${bytes.padStart(8)}  ${speed.padEnd(10)}`
+}
+
+export type Outcome = {filepath?: string}
+
+type Phase =
+  | {name: 'input'; warning?: string}
+  | {name: 'probing'; status: string}
+  | {name: 'picking'}
+  | {
+      name: 'downloading'
+      choice: DownloadChoice
+      progress?: DownloadProgress
+      processing: boolean
+      refreshing?: boolean
+    }
+  | {name: 'done'; filepath: string}
+  | {name: 'error'; message: string}
+
+const HINTS: Record<Phase['name'], Array<[string, string]>> = {
+  input: [
+    ['↵', 'enter'],
+    ['^c', 'quit'],
+  ],
+  probing: [
+    ['esc', 'cancel'],
+    ['^c', 'quit'],
+  ],
+  picking: [
+    ['↑↓', 'choose'],
+    ['↵', 'enter'],
+    ['esc', 'back'],
+    ['^c', 'quit'],
+  ],
+  downloading: [
+    ['esc', 'cancel'],
+    ['^c', 'quit'],
+  ],
+  done: [['^c', 'quit']],
+  error: [
+    ['↵', 'try again'],
+    ['^c', 'quit'],
+  ],
+}
+
+type AppProps = {
+  initialUrl?: string
+  clipboardUrl?: string
+  initialThemeMode?: ThemeMode
+  onOutcome?: (outcome: Outcome) => void
+}
+
+export function App({initialThemeMode = 'auto', ...props}: AppProps) {
+  const [themeMode, setThemeMode] = useState(initialThemeMode)
+  const cycleTheme = useCallback(() => {
+    setThemeMode(nextThemeMode)
   }, [])
+
+  return (
+    <ThemeProvider mode={themeMode}>
+      <AppContent {...props} cycleTheme={cycleTheme} />
+    </ThemeProvider>
+  )
+}
+
+function AppContent({
+  initialUrl,
+  clipboardUrl,
+  onOutcome,
+  cycleTheme,
+}: {
+  initialUrl?: string
+  clipboardUrl?: string
+  onOutcome?: (outcome: Outcome) => void
+  cycleTheme: () => void
+}) {
+  const theme = useTheme()
+  const {exit} = useApp()
+  const {stdout} = useStdout()
+  const [url, setUrl] = useState(initialUrl ?? '')
+  const [urlInput, setUrlInput] = useState('')
+  const [history, setHistory] = useState(loadHistory)
+  const [platform, setPlatform] = useState<Platform>()
+  const [info, setInfo] = useState<VideoInfo>()
+  const [choices, setChoices] = useState<DownloadChoice[]>([])
+  const ytdlpRef = useRef('')
+  const highlightRef = useRef(0) // choice under the cursor, for the ↵ hint click
+  const infoJsonRef = useRef<string | undefined>(undefined)
+  const abortRef = useRef<AbortController | undefined>(undefined)
+  const [phase, setPhase] = useState<Phase>(initialUrl ? {name: 'probing', status: 'warming up…'} : {name: 'input'})
+
+  const columns = stdout?.columns && stdout.columns > 0 ? stdout.columns : 80
+  const boxWidth = Math.max(14, Math.min(64, columns - 6))
+  const contentWidth = Math.max(10, Math.min(columns - 4, 78))
 
   const startProbe = useCallback(async (targetUrl: string) => {
-    if (!targetUrl.trim()) return
-    setScreen('probing')
-    setStatusMessage('Checking dependencies...')
-    setErrorMessage('')
-    setUrl(targetUrl)
-
+    const controller = new AbortController()
+    abortRef.current = controller
+    setPlatform(detectPlatform(targetUrl))
+    setPhase({name: 'probing', status: 'warming up…'})
     try {
-      const ac = new AbortController()
-      abortControllerRef.current = ac
-
-      if (!ytdlpPathRef.current) {
-        ytdlpPathRef.current = await ensureYtDlp(msg => setStatusMessage(msg), ac.signal)
-      }
-      if (ffmpegPathRef.current === undefined) {
-        ffmpegPathRef.current = await findFfmpeg()
-      }
-
-      setStatusMessage(`Fetching video info for ${detectPlatform(targetUrl).label}...`)
-      const res = await probe(ytdlpPathRef.current, targetUrl, ac.signal)
-      setVideoInfo(res.info)
-      setInfoJsonPath(res.infoJsonPath)
-
-      const availableChoices = buildChoices(res.info)
-      setChoices(availableChoices)
-      setHistory(addToHistory(targetUrl))
-      setScreen('choice')
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') return
-      setErrorMessage(err instanceof Error ? err.message : String(err))
-      setScreen('error')
+      const ytdlp =
+        ytdlpRef.current ||
+        (await ensureYtDlp(status => setPhase({name: 'probing', status}), controller.signal))
+      ytdlpRef.current = ytdlp
+      if (controller.signal.aborted) return
+      setPhase({name: 'probing', status: 'fetching video info…'})
+      const {info: videoInfo, infoJsonPath} = await probe(ytdlp, targetUrl, controller.signal)
+      if (controller.signal.aborted) return
+      infoJsonRef.current = infoJsonPath
+      setInfo(videoInfo)
+      setChoices(buildChoices(videoInfo))
+      highlightRef.current = 0
+      setPhase({name: 'picking'})
+    } catch (error) {
+      if (controller.signal.aborted) return
+      setPhase({name: 'error', message: error instanceof Error ? error.message : String(error)})
     }
   }, [])
 
   useEffect(() => {
-    if (initialUrl) {
-      void startProbe(initialUrl)
-    }
+    if (initialUrl) void startProbe(initialUrl)
   }, [initialUrl, startProbe])
 
-  const handleSelectChoice = useCallback(
-    async (item: {value: DownloadChoice}) => {
-      const choice = item.value
-      setScreen('downloading')
-      setProgress(null)
-      setIsProcessing(false)
+  const resetToInput = useCallback(() => {
+    setUrl('')
+    setUrlInput('')
+    setPlatform(undefined)
+    setInfo(undefined)
+    setChoices([])
+    setPhase({name: 'input'})
+  }, [])
 
-      try {
-        const ac = new AbortController()
-        abortControllerRef.current = ac
+  const cancelRun = useCallback(() => {
+    abortRef.current?.abort()
+    resetToInput()
+    setUrlInput(url) // keep the link around so a cancel isn't destructive
+  }, [resetToInput, url])
 
-        const outDir = process.env.DOWNLOAD_DIR || os.homedir()
-
-        const finalPath = await download(
-          {
-            ytdlp: ytdlpPathRef.current!,
-            ffmpegLocation: ffmpegPathRef.current,
-            url,
-            infoJsonPath,
-            choice,
-            outDir,
-          },
-          {
-            onProgress: p => setProgress(p),
-            onProcessing: () => setIsProcessing(true),
-          },
-          ac.signal,
-        )
-
-        setSavedPath(finalPath)
-        setScreen('complete')
-      } catch (err: unknown) {
-        if (err instanceof Error && err.name === 'AbortError') return
-        setErrorMessage(err instanceof Error ? err.message : String(err))
-        setScreen('error')
+  useInput(
+    (input, key) => {
+      if (key.ctrl && input === 't') {
+        cycleTheme()
+        return
       }
+      if (key.escape && (phase.name === 'picking' || phase.name === 'error' || phase.name === 'done')) resetToInput()
+      if (key.escape && (phase.name === 'probing' || phase.name === 'downloading')) cancelRun()
+      if (key.return && (phase.name === 'error' || phase.name === 'done')) resetToInput()
     },
-    [url, infoJsonPath],
+    {isActive: Boolean(process.stdin.isTTY)},
   )
 
-  const urlRef = useRef(url)
-  urlRef.current = url
-
-  useMouseClick((x, y) => {
-    if (screen === 'input') {
-      const hit = clickTargetAt(x, y, [
-        {
-          match: 'Enter',
-          action: () => {
-            const current = urlRef.current
-            if (current.trim()) void startProbe(current)
-          },
-        },
-      ])
-      hit?.action()
-    }
-  }, screen === 'input')
-
-  useInput((input, key) => {
-    if (key.escape) {
-      if (screen === 'probing' || screen === 'downloading') {
-        abortControllerRef.current?.abort()
-      }
-      if (screen !== 'input') {
-        setScreen('input')
-      } else {
-        exit()
-      }
+  const handleUrlSubmit = (value: string) => {
+    const trimmed = value.trim()
+    if (!isProbablyUrl(trimmed)) {
+      setPhase({name: 'input', warning: 'that doesn’t look like a link — paste a full url'})
       return
     }
+    setUrl(trimmed)
+    void startProbe(trimmed)
+  }
 
-    if (screen === 'input') {
-      if (input === 'c' && !urlRef.current) {
-        const pasted = readClipboard()
-        if (pasted && isProbablyUrl(pasted)) {
-          setUrl(pasted)
+  const clipboardOffered = Boolean(clipboardUrl) && isProbablyUrl(clipboardUrl!) && urlInput === ''
+  const clipboardAccepted = Boolean(clipboardUrl) && isProbablyUrl(clipboardUrl!) && urlInput === clipboardUrl
+
+  const handlePick = (item: {value: number}) => {
+    const choice = choices[item.value]
+    const controller = new AbortController()
+    abortRef.current = controller
+    setPhase({name: 'downloading', choice, processing: false})
+    void (async () => {
+      const handlers = {
+        onProgress: (progress: DownloadProgress) =>
+          setPhase(prev => (prev.name === 'downloading' ? {...prev, progress, processing: false} : prev)),
+        onProcessing: () =>
+          setPhase(prev => (prev.name === 'downloading' ? {...prev, processing: true} : prev)),
+      }
+      try {
+        const ffmpegLocation = await findFfmpeg()
+        const base = {ytdlp: ytdlpRef.current, ffmpegLocation, url, choice, outDir: OUT_DIR}
+        let filepath: string
+        try {
+          // reuse the probe's metadata — starts immediately instead of re-extracting
+          filepath = await download({...base, infoJsonPath: infoJsonRef.current}, handlers, controller.signal)
+        } catch (error) {
+          if (controller.signal.aborted) throw error
+          // media urls in the cached info can expire — retry with a fresh extraction
+          setPhase(prev =>
+            prev.name === 'downloading' ? {...prev, progress: undefined, refreshing: true} : prev,
+          )
+          filepath = await download(base, handlers, controller.signal)
+        }
+        onOutcome?.({filepath})
+        setHistory(addToHistory(url))
+        setPhase({name: 'done', filepath})
+      } catch (error) {
+        if (controller.signal.aborted) return
+        setPhase({name: 'error', message: error instanceof Error ? error.message : String(error)})
+      }
+    })()
+  }
+
+  let hints: Array<[string, string]> = [...HINTS[phase.name], ['^t', `theme:${theme.mode}`]]
+  if (phase.name === 'input' && history.length > 0) {
+    hints = [hints[0]!, ['↑', 'history'], ...hints.slice(1)]
+  }
+
+  // Anything a mouse user would expect to press is clickable. Targets are
+  // found by their text in the rendered frame (see lib/click-map.ts), so
+  // there is no layout math to keep in sync.
+  const hintAction = (key: string): (() => void) | undefined => {
+    if (key === '^c') return () => exit()
+    if (key === '^t') return cycleTheme
+    if (key === 'esc') return phase.name === 'probing' || phase.name === 'downloading' ? cancelRun : resetToInput
+    if (key === '↵') {
+      if (phase.name === 'input') return () => handleUrlSubmit(urlInput)
+      if (phase.name === 'picking') return () => handlePick({value: highlightRef.current})
+      if (phase.name === 'error' || phase.name === 'done') return resetToInput
+    }
+    return undefined // ↑↓ / ↑ stay keyboard-only
+  }
+  const clickTargets: ClickTarget[] = []
+  if (phase.name === 'input') {
+    // the frame button rows above/below the label are part of the button
+    clickTargets.push({match: `  ${VIDYO_BUTTON}  `, padY: 1, action: () => handleUrlSubmit(urlInput)})
+  }
+  if (phase.name === 'picking') {
+    for (const [index, choice] of choices.entries()) {
+      clickTargets.push({match: choiceLabel(choice), action: () => handlePick({value: index})})
+    }
+  }
+  if (phase.name === 'done') {
+    clickTargets.push({match: DONE_LABEL, padX: 4, padY: 1, action: resetToInput})
+  }
+  for (const [key, label] of hints) {
+    const action = hintAction(key)
+    if (action) clickTargets.push({match: `${key} ${label}`, action})
+  }
+
+  useMouseClick(
+    (x, y) => {
+      // the logo takes you home — it's the 3 rows one gap above the tagline
+      const taglineRow = findFrameRow(TAGLINE)
+      if (taglineRow > 3 && y - 1 >= taglineRow - 4 && y - 1 <= taglineRow - 2) {
+        const span = frameRowSpan(y - 1)
+        if (span && x >= span[0] - 1 && x <= span[1] + 1) {
+          if (phase.name === 'probing' || phase.name === 'downloading') cancelRun()
+          else if (phase.name !== 'input') resetToInput()
+          return
         }
       }
-    } else if (screen === 'complete' || screen === 'error') {
-      if (key.return || input === '\r' || input === '\n' || input === ' ') {
-        setScreen('input')
-        setUrl('')
-      }
-    }
-  })
+      clickTargetAt(x, y, clickTargets)?.action()
+    },
+    Boolean(process.stdin.isTTY),
+  )
 
   return (
     <FullScreen>
-      <Box flexDirection="column" alignItems="center" width={64}>
-        <Logo />
-        <Box height={1} />
+      <Logo />
+      <Gap />
+      <Text color={theme.primary}>{TAGLINE}</Text>
+      <Text color={theme.gray} dimColor={theme.dimSecondary}>youtube · instagram · x · tiktok · threads · reddit · 1000+ sites</Text>
+      <Gap />
 
-        {screen === 'input' && (
-          <Box flexDirection="column" width={60}>
-            <FramedInput title="Paste a video link" width={60} button="Enter">
-              <TextInput
-                value={url}
-                onChange={setUrl}
-                onSubmit={val => void startProbe(val)}
-                placeholder="https://..."
-                width={50}
-                history={history}
-                submitOnPaste={val => isProbablyUrl(val)}
-              />
-            </FramedInput>
-            <Box height={1} />
-            <Shortcuts
-              items={[
-                ['c', 'paste clipboard'],
-                ['↑/↓', 'history'],
-                ['esc', 'exit'],
-              ]}
+      {phase.name === 'input' && (
+        <Box flexDirection="column" alignItems="center">
+          <FramedInput title="Paste a video URL" width={boxWidth} button={VIDYO_BUTTON}>
+            <TextInput
+              value={urlInput}
+              onChange={setUrlInput}
+              onSubmit={handleUrlSubmit}
+              placeholder="https://youtube.com/watch?v=…"
+              width={boxWidth - 6}
+              history={history}
+              submitOnPaste={isProbablyUrl}
+              onTab={() => {
+                if (clipboardOffered) setUrlInput(clipboardUrl!)
+              }}
             />
+          </FramedInput>
+          {phase.warning ? (
+            <Text color={theme.gray} dimColor={theme.dimSecondary}>✗ {phase.warning}</Text>
+          ) : clipboardOffered ? (
+            <Text color={theme.gray} dimColor={theme.dimSecondary}>link in clipboard — ⇥ to paste it</Text>
+          ) : clipboardAccepted ? (
+            <Text color={theme.gray} dimColor={theme.dimSecondary}>from clipboard — ↵ to enter</Text>
+          ) : null}
+        </Box>
+      )}
+
+      {phase.name === 'probing' && (
+        <Box flexDirection="column" alignItems="center">
+          <FramedInput title={platform ? platform.label : 'Paste a video URL'} width={boxWidth} button={VIDYO_BUTTON} buttonDim>
+            <Text color={theme.gray} dimColor={theme.dimSecondary}>{url.length > boxWidth - 8 ? `${url.slice(0, boxWidth - 9)}…` : url}</Text>
+          </FramedInput>
+        </Box>
+      )}
+
+      {phase.name === 'picking' && platform && (
+        <Box width={contentWidth}>
+          <Box flexDirection="column" flexGrow={1} flexBasis={0} paddingTop={1} paddingRight={3}>
+            {/* wrapped by hand so continuation lines stay flush left —
+                ink's wrapping keeps the break's space as a 1-cell indent */}
+            {wrapText(info?.title ?? '', Math.max(10, contentWidth - 41)).map((line, index) => (
+              <Text key={index} bold color={theme.primary}>
+                {line}
+              </Text>
+            ))}
+            <Gap />
+            <Text color={theme.gray} dimColor={theme.dimSecondary}>
+              ▸ {platform.label}
+              {info?.duration ? ` · ${formatDuration(info.duration)}` : ''}
+              {info?.uploader ? ` · ${info.uploader}` : ''}
+            </Text>
           </Box>
-        )}
-
-        {screen === 'probing' && (
-          <Panel title="Analyzing video..." width={60}>
-            <Box paddingY={1}>
-              <Text color={theme.info}>
-                <Spinner type="dots" />
-              </Text>
-              <Text> {statusMessage}</Text>
-            </Box>
-            <Shortcuts items={[['esc', 'cancel']]} />
-          </Panel>
-        )}
-
-        {screen === 'choice' && videoInfo && (
-          <Panel title={videoInfo.title || 'Select format'} width={60}>
-            <Box flexDirection="column" paddingY={1}>
-              {videoInfo.uploader && (
-                <Text color={theme.secondary}>
-                  Uploader: <Text color={theme.primary}>{videoInfo.uploader}</Text>
-                </Text>
-              )}
-              {videoInfo.duration && (
-                <Text color={theme.secondary}>
-                  Duration: <Text color={theme.primary}>{formatDuration(videoInfo.duration)}</Text>
-                </Text>
-              )}
-              <Box height={1} />
-              <Text bold color={theme.primary}>
-                Select download option:
-              </Text>
-              <SelectInput
-                items={choices.map((c, index) => ({
-                  key: `${c.kind}-${c.label}-${index}`,
-                  label: c.label,
-                  value: c,
-                }))}
-                onSelect={handleSelectChoice}
-              />
-            </Box>
-            <Shortcuts
-              items={[
-                ['↑/↓', 'navigate'],
-                ['enter', 'select'],
-                ['esc', 'back'],
-              ]}
+          <Panel title="Download" width={38}>
+            <SelectInput
+              indicatorComponent={ChoiceIndicator}
+              itemComponent={ChoiceItem}
+              items={choices.map((choice, index) => ({
+                key: String(index),
+                label: choiceLabel(choice),
+                value: index,
+              }))}
+              onSelect={handlePick}
+              onHighlight={item => (highlightRef.current = item.value)}
             />
           </Panel>
-        )}
+        </Box>
+      )}
 
-        {screen === 'downloading' && (
-          <Panel title={isProcessing ? 'Processing video...' : 'Downloading video...'} width={60}>
-            <Box flexDirection="column" paddingY={1}>
-              {isProcessing ? (
-                <Box>
-                  <Text color={theme.warning}>
+      {phase.name === 'downloading' && (
+        <Box flexDirection="column" alignItems="center">
+          <Text color={theme.gray} dimColor={theme.dimSecondary}>
+            {info?.title ? `${truncate(info.title, 42)} · ` : ''}
+            {phase.choice.label}
+          </Text>
+          <Gap />
+          {/* every branch is exactly three rows — bar, gap, meta — so the layout never jumps */}
+          {phase.processing ? (
+            <>
+              <ProgressBar percent={1} />
+              <Gap />
+              <Text>
+                <Text color={theme.primary}>
+                  <Spinner type="dots" />
+                </Text>
+                <Text color={theme.gray} dimColor={theme.dimSecondary}> processing…</Text>
+              </Text>
+            </>
+          ) : phase.progress?.totalBytes ? (
+            <>
+              <ProgressBar percent={phase.progress.downloadedBytes / phase.progress.totalBytes} />
+              <Gap />
+              <Text color={theme.gray} dimColor={theme.dimSecondary}>{downloadMeta(phase.progress)}</Text>
+            </>
+          ) : phase.progress ? (
+            <>
+              <Text>
+                <Text color={theme.primary}>
+                  <Spinner type="dots" />
+                </Text>
+                <Text color={theme.gray} dimColor={theme.dimSecondary}> downloading…</Text>
+              </Text>
+              <Gap />
+              <Text color={theme.gray} dimColor={theme.dimSecondary}>{indeterminateMeta(phase.progress)}</Text>
+            </>
+          ) : (
+            <>
+              <ProgressBar percent={0} />
+              <Gap />
+              <Text>
+                <Text color={theme.primary}>
+                  <Spinner type="dots" />
+                </Text>
+                <Text color={theme.gray} dimColor={theme.dimSecondary}>
+                  {phase.refreshing ? ' link expired — grabbing a fresh one…' : ' starting download…'}
+                </Text>
+              </Text>
+            </>
+          )}
+        </Box>
+      )}
+
+      {phase.name === 'done' && (
+        <Box flexDirection="column" alignItems="center">
+          <Text>
+            <Text bold color={theme.primary}>✓ video saved! </Text>
+            <Text color={theme.primary}>find your file in:</Text>
+          </Text>
+          <Text color={theme.gray} dimColor={theme.dimSecondary}>{shortenPath(phase.filepath, os.homedir(), 60)}</Text>
+          <Gap />
+          <Box
+            borderStyle="round"
+            borderColor={theme.gray}
+            borderDimColor={theme.dimSecondary}
+            borderBackgroundColor={theme.background}
+            paddingX={3}
+          >
+            <Text bold color={theme.primary}>{DONE_LABEL}</Text>
+          </Box>
+        </Box>
+      )}
+
+      {phase.name === 'error' && (
+        <Box flexDirection="column" alignItems="center" width={Math.max(10, Math.min(columns - 6, 72))}>
+          <Text bold color={theme.primary}>✗ {phase.message}</Text>
+        </Box>
+      )}
+
+      {hints.length > 0 ? (
+        <>
+          <Gap lines={2} />
+          <Shortcuts
+            items={hints}
+            leading={
+              phase.name === 'probing' ? (
+                <Text>
+                  <Text color={theme.primary}>
                     <Spinner type="dots" />
                   </Text>
-                  <Text> Merging formats / extracting audio...</Text>
-                </Box>
-              ) : (
-                <>
-                  <ProgressBar percent={(progress?.downloadedBytes ?? 0) / (progress?.totalBytes || 1)} width={40} />
-                  <Box height={1} />
-                  <Box justifyContent="space-between">
-                    <Text color={theme.secondary}>
-                      {formatBytes(progress?.downloadedBytes ?? 0)}
-                      {progress?.totalBytes ? ` / ${formatBytes(progress.totalBytes)}` : ''}
-                    </Text>
-                    {progress?.speed ? <Text color={theme.secondary}>{formatSpeed(progress.speed)}</Text> : null}
-                    {progress?.eta ? <Text color={theme.secondary}>ETA: {formatEta(progress.eta)}</Text> : null}
-                  </Box>
-                </>
-              )}
-            </Box>
-            <Shortcuts items={[['esc', 'cancel']]} />
-          </Panel>
-        )}
-
-        {screen === 'complete' && (
-          <Panel title="Download finished!" width={60}>
-            <Box flexDirection="column" paddingY={1}>
-              <Text color={theme.success}>Saved to:</Text>
-              <Text color={theme.primary}>{shortenPath(savedPath, os.homedir())}</Text>
-            </Box>
-            <Shortcuts
-              items={[
-                ['enter', 'download another'],
-                ['esc', 'exit'],
-              ]}
-            />
-          </Panel>
-        )}
-
-        {screen === 'error' && (
-          <Panel title="Error" width={60}>
-            <Box flexDirection="column" paddingY={1}>
-              <Text color={theme.error}>{errorMessage}</Text>
-            </Box>
-            <Shortcuts
-              items={[
-                ['enter', 'try again'],
-                ['esc', 'exit'],
-              ]}
-            />
-          </Panel>
-        )}
-      </Box>
+                  <Text color={theme.gray} dimColor={theme.dimSecondary}> {phase.status}</Text>
+                </Text>
+              ) : undefined
+            }
+          />
+        </>
+      ) : null}
     </FullScreen>
   )
 }
 
-export default function App({initialUrl, initialTheme = 'auto'}: AppProps) {
-  const [themeMode, setThemeMode] = useState<ThemeMode>(initialTheme)
+export default App
 
-  useInput(input => {
-    if (input === 't') {
-      setThemeMode(prev => nextThemeMode(prev))
-    }
-  })
-
-  return (
-    <ThemeProvider mode={themeMode}>
-      <MainApp initialUrl={initialUrl} />
-    </ThemeProvider>
-  )
-}
