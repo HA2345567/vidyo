@@ -1,266 +1,193 @@
 # vidyo
 
+<div align="center">
+
 ```
   █ █ ███ ██◥ █ █ ◢█◣
   █ █  █  █ █ ◥█◤ █ █
    █  ███ ██◢  █  ◥█◤
 ```
 
-> **Stream to storage in seconds. Paste, pick, play.**
+### **Stream to storage in seconds. Paste, pick, play.**
 
-A luxurious, blazing-fast **terminal UI** for downloading videos from YouTube, Instagram, X (Twitter), TikTok, Threads, Reddit, and **1000+ more sites** — all without leaving your command line.
+[![npm version](https://img.shields.io/npm/v/vidyo-cli.svg?color=brightgreen&style=flat-square)](https://www.npmjs.com/package/vidyo-cli)
+[![license](https://img.shields.io/github/license/HA2345567/vidyo.svg?style=flat-square)](LICENSE)
+[![node version](https://img.shields.io/badge/node-%3E%3D18-blue.svg?style=flat-square)](https://nodejs.org)
+[![bun](https://img.shields.io/badge/bun-%3E%3D1.0-black.svg?style=flat-square)](https://bun.sh)
 
----
+A luxurious, blazing-fast **Terminal UI** for searching and downloading videos/audio from YouTube, Instagram, X (Twitter), TikTok, Threads, Reddit, and **1000+ sites** — all from your command line.
 
-## ✨ Features
-
-- 🎬 **1000+ supported sites** — YouTube, Instagram, X, TikTok, Threads, Reddit, Vimeo, SoundCloud, and more (powered by `yt-dlp`)
-- ⚡ **Instant clipboard detection** — paste a URL and it auto-detects it before you type
-- 🎨 **15 beautiful themes** — cycle with `^T` in the terminal
-- 📼 **Format picker** — select between video resolutions or audio-only download
-- 🕒 **Download history** — browse previously downloaded videos with `↑`
-- 📊 **Live progress bar** — real-time speed, ETA, and file size feedback
-- 🖱️ **Mouse click support** — click the logo to go home, click buttons to act
-- 🎞️ **FFmpeg bundled** — no separate installation required
-- 💾 **Saves to `~/Downloads`** automatically
-- 🔒 **Zero config** — works out of the box
+</div>
 
 ---
 
 ## 📸 Preview
 
 <div align="center">
-  <img src="public/vidyo_terminal_pic.png" alt="VIDYO Terminal UI Preview" width="700" />
+  <img src="public/vidyo_terminal_pic.png" alt="VIDYO Terminal UI Preview" width="750" />
 </div>
 
 ---
 
-## 🚀 Installation
+## ✨ Features
 
-### Requirements
+- 🔍 **Interactive YouTube Search** — Type any search term (e.g. `lofi study beats`) to browse and pick videos directly inside the terminal.
+- 🎬 **1000+ Supported Sites** — YouTube, Instagram, X, TikTok, Threads, Reddit, Vimeo, SoundCloud, and more (powered by `yt-dlp`).
+- 🎵 **Audio Extraction Presets** — High quality MP3 (320k), M4A (AAC), FLAC (Lossless), and WAV (Uncompressed).
+- ⚡ **Instant Clipboard Auto-Paste** — Auto-detects video links in your clipboard before you type.
+- 🎨 **15 Color Themes** — Instant theme switching with `Ctrl + T` (Red, Yellow, Sunset, Neon, Dracula, Nord, Catppuccin, Matrix, Cyberpunk, etc.).
+- 📊 **Real-time Download Progress** — Live speed meter, ETA, and progress bar.
+- 🖱️ **Full Mouse & Keyboard Support** — Interactive TUI click targets for menus, logo, and buttons.
+- 🕒 **Download History** — Quickly recall past downloaded URLs with `↑` arrow key.
+- 🎞️ **Bundled FFmpeg** — Automatic audio conversion and video stream merging with zero manual setup.
+- 💾 **Automatic Storage** — Saves media directly to your local `~/Downloads` folder.
 
-| Dependency | Version  |
-|------------|----------|
-| Node.js    | ≥ 18     |
-| Bun        | ≥ 1.0    |
+---
 
-### Install from npm
+## 🚀 Quick Start
+
+Run instantly without installing anything:
 
 ```bash
-npm install -g vidyo-cli
+bunx vidyo-cli@latest
 # or
-bun install -g vidyo-cli
+npx vidyo-cli@latest
 ```
 
-### Run directly (no install)
+### Global Installation
 
 ```bash
-npx vidyo-cli
+bun install -g vidyo-cli
 # or
-bunx vidyo-cli
+npm install -g vidyo-cli
+```
+
+Once installed globally, simply run:
+```bash
+vidyo
 ```
 
 ---
 
-## 🛠️ Development
+## 🎮 How to Use
 
-### Clone & Install
+### 1. Download by URL
+Paste any video link into the prompt and hit `Enter`:
+```
+https://www.youtube.com/watch?v=...
+https://youtu.be/...
+https://www.instagram.com/reel/...
+```
+
+### 2. Search Videos Directly
+Type any search query into the prompt (e.g., `coding lofi beats` or `react 19 tutorial`). **vidyo** will fetch YouTube search results in an interactive list for you to choose from!
+
+### 3. Choose Format & Quality
+Select your desired video resolution (`1080p`, `720p`, `480p`, etc.) or audio extraction preset (`MP3`, `M4A`, `FLAC`, `WAV`).
+
+---
+
+## ⌨️ Shortcuts & Controls
+
+| Key | Action |
+| :--- | :--- |
+| `↵ Enter` | Grab video / Confirm selection |
+| `↑ / ↓` | Navigate menus & search results |
+| `↑ (at input)` | Open download history |
+| `Ctrl + T` | Cycle color theme (15 themes) |
+| `Esc` | Back to input / Cancel download |
+| `Ctrl + C` | Quit application |
+| `Mouse Click` | Click any button, menu item, or logo |
+
+---
+
+## 🎨 Theme Gallery
+
+Cycle through 15 themes seamlessly in real-time with `Ctrl + T`:
+
+| Theme | Description |
+| :--- | :--- |
+| **`auto`** | Adaptive system terminal theme |
+| **`light`** | Clean high-contrast light mode |
+| **`dark`** | Deep dark obsidian palette |
+| **`red`** | Crimson ruby accent |
+| **`yellow`** | Amber gold theme |
+| **`sunset`** | Warm sunset orange |
+| **`neon`** | Electric teal & hot pink |
+| **`dracula`** | Classic Dracula purple |
+| **`nord`** | Arctic frost blue |
+| **`catppuccin`** | Warm Mocha pastel |
+| **`tokyo`** | Tokyo Night neon |
+| **`gruvbox`** | Retro warm earthy tones |
+| **`rosepine`** | Elegant rose & pine |
+| **`matrix`** | Digital rain green |
+| **`cyberpunk`** | High-voltage neon cyan |
+
+---
+
+## 🛠️ Development Setup
 
 ```bash
+# 1. Clone repo
 git clone https://github.com/HA2345567/vidyo.git
 cd vidyo
+
+# 2. Install dependencies
 bun install
-```
 
-### Run in dev mode
-
-```bash
+# 3. Run locally
 bun start
-```
 
-### Build
-
-```bash
-bun run build
-```
-
-### Watch mode (auto-rebuild on changes)
-
-```bash
-bun run dev:cli
-```
-
-### Run tests
-
-```bash
+# 4. Run tests
 bun test
-```
 
-### Typecheck
-
-```bash
+# 5. Typecheck & Lint
 bun run typecheck
-```
-
-### Lint
-
-```bash
 bun run lint
 ```
 
 ---
 
-## 📁 Project Structure
+## 📁 Architecture & File Structure
 
 ```
 vidyo/
 ├── src/
-│   ├── App.tsx                  # Main terminal app entry
-│   ├── cli.tsx                  # CLI bootstrap & flags
-│   ├── theme.tsx                # Theme system (15 themes)
+│   ├── App.tsx                  # Core TUI Application logic & state
+│   ├── cli.tsx                  # CLI entry point & argument parser
+│   ├── theme.tsx                # Theme provider & 15 color definitions
 │   ├── components/
-│   │   ├── logo.tsx             # Animated VIDYO ASCII logo
-│   │   ├── framed-input.tsx     # URL input with frame styling
+│   │   ├── logo.tsx             # Animated VIDYO ASCII Header Logo
+│   │   ├── framed-input.tsx     # Custom TUI Framed Input component
 │   │   ├── fullscreen.tsx       # Full terminal canvas wrapper
-│   │   ├── progress-bar.tsx     # Real-time download progress
-│   │   ├── pannel.tsx           # Info panel component
-│   │   ├── shortcuts-bar.tsx    # Keyboard hints bar
-│   │   └── text-input.tsx       # Styled text input
+│   │   ├── pannel.tsx           # TUI Panel container
+│   │   ├── progress-bar.tsx     # Smooth download progress bar
+│   │   ├── shortcuts-bar.tsx    # Interactive shortcuts footer bar
+│   │   └── text-input.tsx       # Styled text input control
 │   └── lib/
-│       ├── ytdlp.ts             # yt-dlp process management
-│       ├── clipboard.ts         # Clipboard URL detection
-│       ├── history.ts           # Download history (JSON)
-│       ├── format.ts            # Bytes, duration, speed utilities
-│       ├── format.test.ts       # Unit tests for format utilities
-│       ├── platform.ts          # OS platform detection
-│       ├── click-map.ts         # Mouse click target mapping
-│       └── use-mouse-click.ts   # Ink mouse click hook
-├── tsup.config.json             # tsup bundler config
-├── tsconfig.json                # TypeScript config
-├── package.json
-└── .gitignore
+│       ├── ytdlp.ts             # yt-dlp process wrapper & search engine
+│       ├── clipboard.ts         # System clipboard detector
+│       ├── history.ts           # JSON Download History storage
+│       ├── format.ts            # Speed, ETA & byte formatting helpers
+│       ├── format.test.ts       # Unit test suite
+│       ├── platform.ts          # Supported site detector
+│       ├── click-map.ts         # Mouse click target calculator
+│       └── use-mouse-click.ts   # Ink TUI mouse click listener
+├── public/
+│   └── vidyo_terminal_pic.png   # README Preview Screenshot
+├── package.json                 # Project manifest & CLI bin config
+├── tsup.config.json             # tsup CLI bundler settings
+└── README.md
 ```
-
----
-
-## 🎨 Themes
-
-Switch themes at any time by pressing **`Ctrl + T`** while the app is running.
-
-| Theme       | Style                                  |
-|-------------|----------------------------------------|
-| `auto`      | Inherits your terminal default         |
-| `light`     | Clean white, minimal                   |
-| `dark`      | Crisp dark with white text             |
-| `red`       | Crimson on deep ruby background        |
-| `yellow`    | Amber gold on dark onyx                |
-| `sunset`    | Sunset orange with warm dark bg        |
-| `neon`      | Electric teal & hot pink on midnight   |
-| `dracula`   | Classic Dracula purple palette         |
-| `nord`      | Cool Nordic arctic blues               |
-| `catppuccin`| Pastel Mocha-inspired palette          |
-| `tokyo`     | Tokyo Night purple/blue                |
-| `gruvbox`   | Retro warm earthy tones                |
-| `rosepine`  | Elegant rose and pine muted tones      |
-| `matrix`    | Green-on-black Matrix terminal         |
-| `cyberpunk` | Cyan & magenta neon on black           |
-
----
-
-## ⌨️ Keyboard Shortcuts
-
-| Key         | Action                           |
-|-------------|----------------------------------|
-| `↵ Enter`   | Grab video / confirm selection   |
-| `↑ / ↓`     | Browse download history          |
-| `^T`        | Cycle to next theme              |
-| `^C`        | Quit the application             |
-
----
-
-## 🔧 How It Works
-
-1. **Paste a video URL** into the input prompt.
-2. **vidyo probes** the URL using `yt-dlp` to fetch available formats.
-3. **Pick a format** — video in various resolutions or audio-only.
-4. **Download begins** with live speed, ETA, and file size displayed.
-5. **File saved** to `~/Downloads` automatically.
-6. **History logged** to `~/.config/vidyo/history.json`.
-
----
-
-## 📦 Tech Stack
-
-| Library           | Purpose                              |
-|-------------------|--------------------------------------|
-| [Ink](https://github.com/vadimdemedes/ink) | React for terminal UIs |
-| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Video downloading engine |
-| [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static) | Bundled FFmpeg binary |
-| [React 19](https://react.dev) | UI component framework |
-| [TypeScript](https://www.typescriptlang.org) | Type safety |
-| [tsup](https://tsup.egoist.dev) | ESM bundler |
-| [Bun](https://bun.sh) | Runtime & test runner |
-
----
-
-## 🧪 Testing
-
-```bash
-bun test
-```
-
-The test suite covers format utilities:
-
-```
-✓ formatBytes formats bytes correctly
-✓ formatDuration formats seconds to MM:SS or HH:MM:SS
-✓ truncate shortens string
-✓ shortenPath shortens path
-✓ wrapText wraps words within width
-✓ formatSpeed formats speed correctly
-
-6 pass · 0 fail
-```
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Here's how to get started:
-
-1. **Fork** the repository
-2. **Clone** your fork:
-   ```bash
-   git clone https://github.com/your-username/vidyo.git
-   ```
-3. **Create** a feature branch:
-   ```bash
-   git checkout -b feat/my-awesome-feature
-   ```
-4. **Commit** your changes:
-   ```bash
-   git commit -m "feat: add my awesome feature"
-   ```
-5. **Push** and open a **Pull Request**
-
-Please ensure `bun run prepublishOnly` passes before submitting.
 
 ---
 
 ## 📜 License
 
-MIT © [HA2345567](https://github.com/HA2345567)
-
----
-
-## 🔗 Links
-
-- **GitHub**: [github.com/HA2345567/vidyo](https://github.com/HA2345567/vidyo)
-- **Issues**: [github.com/HA2345567/vidyo/issues](https://github.com/HA2345567/vidyo/issues)
-- **yt-dlp supported sites**: [github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md](https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md)
+Distributed under the **MIT License**. See `LICENSE` for details.
 
 ---
 
 <div align="center">
-  <sub>Built with ❤️ for developers who live in the terminal.</sub>
+  <sub>Built with ❤️ for developers who love the terminal.</sub>
 </div>
