@@ -24,7 +24,7 @@ A luxurious, blazing-fast **Terminal UI** for searching and downloading videos/a
 ## 📸 Preview
 
 <div align="center">
-  <img src="public/vidyo_terminal_pic.png" alt="VIDYO Terminal UI Preview" width="750" />
+  <video src="public/vidyo_vedio.mp4" width="750" controls autoplay loop muted></video>
 </div>
 
 ---
