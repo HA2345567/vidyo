@@ -2,11 +2,10 @@
 
 <div align="center">
 
-```
   █ █ ███ ██◥ █ █ ◢█◣
   █ █  █  █ █ ◥█◤ █ █
    █  ███ ██◢  █  ◥█◤
-```
+
 
 ### **Stream to storage in seconds. Paste, pick, play.**
 
@@ -179,6 +178,7 @@ vidyo/
 │   └── vidyo_terminal_pic.png   # README Preview Screenshot
 ├── package.json                 # Project manifest & CLI bin config
 ├── tsup.config.json             # tsup CLI bundler settings
+├── LICENSE                      # MIT License file
 └── README.md
 ```
 
