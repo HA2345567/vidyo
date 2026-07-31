@@ -11,6 +11,8 @@
 ### **Stream to storage in seconds. Paste, pick, play.**
 
 [![npm version](https://img.shields.io/npm/v/vidyo-cli.svg?color=brightgreen&style=flat-square)](https://www.npmjs.com/package/vidyo-cli)
+[![npm downloads](https://img.shields.io/npm/dm/vidyo-cli.svg?color=blue&style=flat-square)](https://www.npmjs.com/package/vidyo-cli)
+[![total downloads](https://img.shields.io/npm/dt/vidyo-cli.svg?color=orange&style=flat-square)](https://www.npmjs.com/package/vidyo-cli)
 [![license](https://img.shields.io/github/license/HA2345567/vidyo.svg?style=flat-square)](LICENSE)
 [![node version](https://img.shields.io/badge/node-%3E%3D18-blue.svg?style=flat-square)](https://nodejs.org)
 [![bun](https://img.shields.io/badge/bun-%3E%3D1.0-black.svg?style=flat-square)](https://bun.sh)
