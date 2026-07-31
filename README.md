@@ -1,10 +1,7 @@
-# vidyo
-
 <div align="center">
 
-  █ █ ███ ██◥ █ █ ◢█◣
-  █ █  █  █ █ ◥█◤ █ █
-   █  ███ ██◢  █  ◥█◤
+# VIDYO
+
 
 
 ### **Stream to storage in seconds. Paste, pick, play.**
@@ -16,7 +13,9 @@
 [![node version](https://img.shields.io/badge/node-%3E%3D18-blue.svg?style=flat-square)](https://nodejs.org)
 [![bun](https://img.shields.io/badge/bun-%3E%3D1.0-black.svg?style=flat-square)](https://bun.sh)
 
-A luxurious, blazing-fast **Terminal UI** for searching and downloading videos/audio from YouTube, Instagram, X (Twitter), TikTok, Threads, Reddit, and **1000+ sites** — all from your command line.
+A luxurious, blazing-fast **Terminal UI** for searching and downloading videos & audio from YouTube, Instagram, X (Twitter), TikTok, Threads, Reddit, and **1000+ sites** — all directly from your command line.
+
+[Quick Start](#-quick-start) • [Features](#-features) • [How to Use](#-how-to-use) • [Shortcuts](#%EF%B8%8F-shortcuts--controls) • [Themes](#-theme-gallery) • [Development](#%EF%B8%8F-development-setup)
 
 </div>
 
@@ -30,9 +29,36 @@ A luxurious, blazing-fast **Terminal UI** for searching and downloading videos/a
 
 ---
 
+## 🚀 Quick Start
+
+Run instantly in your terminal without installing:
+
+```bash
+npx vidyo-cli@latest
+# or if you use Bun
+bunx vidyo-cli@latest
+```
+
+### Global Installation (Optional)
+
+Install once to use the short `vidyo` command anywhere:
+
+```bash
+npm install -g vidyo-cli
+# or
+bun install -g vidyo-cli
+```
+
+Once installed globally, simply launch:
+```bash
+vidyo
+```
+
+---
+
 ## ✨ Features
 
-- 🔍 **Interactive YouTube Search** — Type any search term (e.g. `lofi study beats`) to browse and pick videos directly inside the terminal.
+- 🔍 **Interactive YouTube Search** — Type any search query (e.g. `lofi study beats`) to browse and pick videos directly inside the terminal.
 - 🎬 **1000+ Supported Sites** — YouTube, Instagram, X, TikTok, Threads, Reddit, Vimeo, SoundCloud, and more (powered by `yt-dlp`).
 - 🎵 **Audio Extraction Presets** — High quality MP3 (320k), M4A (AAC), FLAC (Lossless), and WAV (Uncompressed).
 - ⚡ **Instant Clipboard Auto-Paste** — Auto-detects video links in your clipboard before you type.
@@ -42,31 +68,6 @@ A luxurious, blazing-fast **Terminal UI** for searching and downloading videos/a
 - 🕒 **Download History** — Quickly recall past downloaded URLs with `↑` arrow key.
 - 🎞️ **Bundled FFmpeg** — Automatic audio conversion and video stream merging with zero manual setup.
 - 💾 **Automatic Storage** — Saves media directly to your local `~/Downloads` folder.
-
----
-
-## 🚀 Quick Start
-
-Run instantly without installing anything:
-
-```bash
-bunx vidyo-cli@latest
-# or
-npx vidyo-cli@latest
-```
-
-### Global Installation
-
-```bash
-bun install -g vidyo-cli
-# or
-npm install -g vidyo-cli
-```
-
-Once installed globally, simply run:
-```bash
-vidyo
-```
 
 ---
 
@@ -186,7 +187,7 @@ vidyo/
 
 ## 📜 License
 
-Distributed under the **MIT License**. See `LICENSE` for details.
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for details.
 
 ---
 
