@@ -1,9 +1,20 @@
 {
-  "name": "vidyo-cli",
+  "name": "@ha2345567/vidyo-cli",
   "version": "1.2.0",
   "description": "Stream to storage in seconds. Terminal UI video downloader powered by yt-dlp.",
   "type": "module",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HA2345567/vidyo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HA2345567/vidyo/issues"
+  },
+  "homepage": "https://github.com/HA2345567/vidyo#readme",
   "bin": {
     "vidyo": "dist/cli.js",
     "vidyo-cli": "dist/cli.js"

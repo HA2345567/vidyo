@@ -25,3 +25,7 @@ tsup.config.bundled_*.mjs
 *.njsproj
 *.sln
 *.sw?
+
+# Credentials
+.npmrc
+
